@@ -1,6 +1,7 @@
 class AcmeApi
-	require "helper"
+	require 'json'
 	require 'net/https'
+	require "helper"
 
 	def initialize(accountkey,acmedirUri=nil,proxy=nil,log=nil)
 		@accountkey=accountkey
@@ -56,7 +57,7 @@ class AcmeApi
 		data = mainRequestData
 		data["payload"] = Helper.base64encode( {
 			"resource" => "new-cert",
-			"csr" => Helper.base64encode csr.to_der
+			"csr" => Helper.base64encode(csr.to_der)
 		}.to_json )
 		data["signature"] = Helper.base64encode @accountkey.sign(OpenSSL::Digest::SHA256.new, data["protected"]+"."+data["payload"])
 		return data.to_json
