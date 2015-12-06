@@ -52,6 +52,16 @@ class AcmeApi
 		return data.to_json  
 	end
 
+	def newCertificate(csr)
+		data = mainRequestData
+		data["payload"] = Helper.base64encode( {
+			"resource" => "new-cert",
+			"csr" => Helper.base64encode csr.to_der
+		}.to_json )
+		data["signature"] = Helper.base64encode @accountkey.sign(OpenSSL::Digest::SHA256.new, data["protected"]+"."+data["payload"])
+		return data.to_json
+	end
+
 	def connect
 		proxy_host=nil
 		proxy_port=nil
