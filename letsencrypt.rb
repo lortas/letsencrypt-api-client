@@ -61,7 +61,7 @@ if csrFilename == nil
 	exit
 else
 	begin
-		csr=File.read csrFilename
+		csr = OpenSSL::X509::Request.new File.read csrFilename
 	rescue StandardError => e
 		log.error "Could not read your certificate signing request from : "+csrFilename
 		exit
