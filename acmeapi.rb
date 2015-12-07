@@ -17,6 +17,12 @@ class AcmeApi
 		end
 		@proxy=proxy
 		@acmeApiCalls={}
+		@accountpubkey=Helper.Pkey2Jwk( @accountkey.public_key )
+		@accountpubkeySha256 = Helper.base64encode OpenSSL::Digest.digest("SHA256",@accountpubkey.to_json)
+	end
+
+	def accountpubkeySha256
+		@accountpubkeySha256
 	end
 
 	# All requests have the same main structure
@@ -24,7 +30,7 @@ class AcmeApi
 		{
 			"header" => {
 				"alg"=>"RS256",
-				"jwk" => Helper.Pkey2Jwk( @accountkey.public_key )
+				"jwk" => @accountpubkey
 			},
 			"protected" => Helper.base64encode( {"nonce"=>@nonce}.to_json ),
 			"payload" =>  nil,
@@ -63,6 +69,16 @@ class AcmeApi
 		return data.to_json
 	end
 
+	def genChallenge(keyauth)
+		data = mainRequestData
+		data["payload"] = Helper.base64encode( {
+			"resource" => "challenge",
+			"keyAuthorization" => keyauth
+		}.to_json )
+		data["signature"] = Helper.base64encode @accountkey.sign(OpenSSL::Digest::SHA256.new, data["protected"]+"."+data["payload"])
+		return data.to_json
+	end
+
 	def connect
 		proxy_host=nil
 		proxy_port=nil
@@ -72,6 +88,7 @@ class AcmeApi
 		end
 		Net::HTTP.start(@acmedirUri.host, @acmedirUri.port, proxy_host, proxy_port, :use_ssl => @acmedirUri.scheme == 'https', :verify_mode => OpenSSL::SSL::VERIFY_NONE  ) do |http|
 			response = yield http
+			@nonce=response["Replay-Nonce"]
 			@log.debug "Request return with code : "+response.code
 			@log.debug "Response data : '"+response.body+"'"
 		end
@@ -82,12 +99,11 @@ class AcmeApi
 		connect do |http|
 			req = Net::HTTP::Get.new @acmedirUri.path
 			response = http.request req
-			@nonce=response["Replay-Nonce"]
 			if response.code.to_i == 200
 				@log.info("ACME Directory successfull received.")
-				 JSON.parse(response.body).each do |k,v|
-					 @acmeApiCalls[k]=URI v
-				 end
+				JSON.parse(response.body).each do |k,v|
+					@acmeApiCalls[k]=URI v
+				end
 			end
 			response
 		end
@@ -99,7 +115,6 @@ class AcmeApi
 			req = Net::HTTP::Post.new @acmeApiCalls["new-reg"].path
 			req.body = newRegistration domain
 			response = http.request req
-			@nonce=response["Replay-Nonce"]
 			result = JSON.parse(response.body)
 			@log.info(result["detail"])
 			response
@@ -108,13 +123,27 @@ class AcmeApi
 
 	def sendNewAuthorisation(domain)
 		@log.info("Send new authorisation for domain : "+domain)
+		challenges=[]
 		connect do |http|
 			req = Net::HTTP::Post.new @acmeApiCalls["new-authz"].path
 			req.body = newAuthorisation domain
 			response = http.request req
-			@nonce=response["Replay-Nonce"]
 			result = JSON.parse(response.body)
-			puts result
+			challenges += result["challenges"]
+			response
+		end
+		return challenges
+	end
+
+	def sendChallenge(uri,keyauth)
+		@log.info("Send challenge response ")
+		connect do |http|
+			@log.debug uri
+			req = Net::HTTP::Post.new uri
+			req.body = genChallenge keyauth
+			@log.debug req.body
+			response = http.request req
+			result = JSON.parse(response.body)
 			response
 		end
 	end
