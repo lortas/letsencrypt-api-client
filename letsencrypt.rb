@@ -16,10 +16,11 @@ require "acmeapi"
 
 # Default Values
 $VERBOSE=false
+acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
+proxy=ENV[acmedirUri.scheme+"_proxy"]
+challengeTokenFolder="."
 accountKeyFile=nil
 csrFilename=nil
-acmedirUri=nil
-proxy=nil
 
 # Opt parsing
 optparse = OptionParser.new do |opts|
@@ -33,11 +34,14 @@ optparse = OptionParser.new do |opts|
 	opts.on( '-c', '--csr FILE', 'File where the certificate signing request (csr) is stored' ) do |f|
 		csrFilename = f
 	end
-	opts.on( '-u', '--letsencryptDirectoryUrl URL', 'URL where the ACME Let\'s encrypt Directory is located.' ) do |f|
+	opts.on( '-u', '--letsencryptDirectoryUrl URL', 'URL where the ACME Let\'s encrypt Directory is located. Default : "'+acmedirUri.to_s+'"' ) do |f|
 		acmedirUri=URI f
 	end
-	opts.on( '-p', '--proxy URL', 'URL of the Proxy to use to access ACME URLs.' ) do |f|
+	opts.on( '-p', '--proxy URL', 'URL of the Proxy to use to access ACME URLs. Default : "'+((proxy==nil)?String.new():proxy)+'"' ) do |f|
 		proxy=URI f
+	end
+	opts.on( '-f', '--challengeTokenFolder DIR', 'Path to the folder where the challenge toke shouls be stored. Default : "'+challengeTokenFolder+'"' ) do |f|
+		challengeTokenFolder = f.sub(/\/*$/,"")
 	end
 end
 
@@ -70,4 +74,15 @@ end
 
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
-acmeapi.sendNewRegistration("lortas.de")
+acmeapi.sendNewRegistration "lortas.de"
+challenges = acmeapi.sendNewAuthorisation "lortas.de"
+challenges.each do |challenge|
+	token=challenge["token"].tr("/","")
+	keyauth=token+"."+acmeapi.accountpubkeySha256
+	f=File.new(challengeTokenFolder+"/"+token,"w")
+	f.chmod(0644)
+	f << keyauth
+	f.close
+	acmeapi.sendChallenge challenge["uri"],keyauth
+	File.unlink f
+end
