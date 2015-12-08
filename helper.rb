@@ -44,4 +44,47 @@ module Helper
 		end
 		return result
 	end
+
+	def getDomainsFromCsr(csr)
+		domains={}
+		csr.subject.to_a.each do |e|
+			if e[0] == "CN"
+				domains[e[1]]=true
+			end
+		end
+		csr.attributes.each do |attributeListByType|
+			attributeListByType.value.each do |attributes|
+				attributes.each do |i|
+					if i.is_a? OpenSSL::ASN1::Sequence
+						ary = Asn1SequenceToArray i
+						if ary.size==2 and ary[0].is_a? OpenSSL::ASN1::ObjectId and ary[0].value=="subjectAltName"
+							Asn1OctetStringToArray(ary[1]).each do |v|
+								domains[v[1]]=true
+							end
+						end
+					end
+				end
+			end
+		end
+		return domains.keys.sort
+	end
+
+	def Asn1SequenceToArray(seq)
+		ret=[]
+		seq.each { |e| ret << e }
+		return ret
+	end
+
+	def Asn1OctetStringToArray(o)
+		ret=[]
+		b=o.value.bytes
+		unknown = b.slice!(0,2)
+		while b.size>0
+			tag=b.slice!(0)
+			length=b.slice!(0)
+			value=b.slice!(0,length).map{|c| c.chr}.join
+			ret << [tag,value]
+		end
+		return ret
+	end
 end
