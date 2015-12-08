@@ -1,7 +1,6 @@
 #!/usr/bin/env ruby
 require 'optparse'
 require 'logger'
-require 'json'
 require 'openssl'
 
 # Logger
@@ -78,20 +77,25 @@ end
 
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
-acmeapi.sendNewRegistration "lortas.de"
-challenges = acmeapi.sendNewAuthorisation "lortas.de"
-challenges.each do |challenge|
-	token=challenge["token"].tr("/","")
-	keyauth=token+"."+acmeapi.accountpubkeySha256
-	case challenge["type"]
-	when "http-01"
-		f=File.new(challengeTokenFolder+"/"+token,"w")
-		f.chmod(0644)
-		f << keyauth
-		f.close
-		acmeapi.sendHttp01Challenge challenge
-		File.unlink f
-	else
-		log.info "Challenge type '"+challenge["type"]+"' not implemented."
+Helper.getDomainsFromCsr(csr).each do |domain|
+	acmeapi.sendNewRegistration domain
+	challenges=acmeapi.sendNewAuthorisation domain
+	challenges.each do |challenge|
+		# we want to use the token as file name
+		# never trust forgin data. so we ensure that there is no bad character
+		token=challenge["token"].tr("/","")
+		case challenge["type"]
+		when "http-01"
+			f=File.new(challengeTokenFolder+"/"+token,"w")
+			f.chmod(0644)
+			f << token
+			f << "."
+			f << acmeapi.accountpubkeySha256
+			f.close
+			acmeapi.sendHttp01Challenge challenge
+			File.unlink f
+		else
+			log.info "Challenge type '"+challenge["type"]+"' not implemented."
+		end
 	end
 end
