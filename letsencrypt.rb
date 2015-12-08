@@ -17,10 +17,14 @@ require "acmeapi"
 # Default Values
 $VERBOSE=false
 acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
-proxy=URI ENV[acmedirUri.scheme+"_proxy"]
+proxy=nil
 challengeTokenFolder="."
 accountKeyFile=nil
 csrFilename=nil
+
+if ENV[acmedirUri.scheme+"_proxy"]
+	proxy=URI ENV[acmedirUri.scheme+"_proxy"]
+end
 
 # Opt parsing
 optparse = OptionParser.new do |opts|
@@ -79,10 +83,15 @@ challenges = acmeapi.sendNewAuthorisation "lortas.de"
 challenges.each do |challenge|
 	token=challenge["token"].tr("/","")
 	keyauth=token+"."+acmeapi.accountpubkeySha256
-	f=File.new(challengeTokenFolder+"/"+token,"w")
-	f.chmod(0644)
-	f << keyauth
-	f.close
-	acmeapi.sendChallenge challenge["uri"],keyauth
-	File.unlink f
+	case challenge["type"]
+	when "http-01"
+		f=File.new(challengeTokenFolder+"/"+token,"w")
+		f.chmod(0644)
+		f << keyauth
+		f.close
+		acmeapi.sendHttp01Challenge challenge
+		File.unlink f
+	else
+		log.info "Challenge type '"+challenge["type"]+"' not implemented."
+	end
 end

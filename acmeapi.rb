@@ -18,6 +18,7 @@ class AcmeApi
 		@proxy=proxy
 		@acmeApiCalls={}
 		@accountpubkey=Helper.Pkey2Jwk( @accountkey.public_key )
+		puts @accountpubkey
 		@accountpubkeySha256 = Helper.base64encode OpenSSL::Digest.digest("SHA256",@accountpubkey.to_json)
 	end
 
@@ -69,11 +70,12 @@ class AcmeApi
 		return data.to_json
 	end
 
-	def genChallenge(keyauth)
+	def genChallenge(challenge)
 		data = mainRequestData
 		data["payload"] = Helper.base64encode( {
 			"resource" => "challenge",
-			"keyAuthorization" => keyauth
+			"type" => challenge["type"],
+			"keyAuthorization" => challenge["token"]+"."+@accountpubkeySha256
 		}.to_json )
 		data["signature"] = Helper.base64encode @accountkey.sign(OpenSSL::Digest::SHA256.new, data["protected"]+"."+data["payload"])
 		return data.to_json
@@ -129,18 +131,20 @@ class AcmeApi
 			req.body = newAuthorisation domain
 			response = http.request req
 			result = JSON.parse(response.body)
-			challenges += result["challenges"]
+			if result["challenges"]
+				challenges += result["challenges"]
+			end
 			response
 		end
 		return challenges
 	end
 
-	def sendChallenge(uri,keyauth)
+	def sendHttp01Challenge(challenge)
 		@log.info("Send challenge response ")
 		connect do |http|
-			@log.debug uri
-			req = Net::HTTP::Post.new uri
-			req.body = genChallenge keyauth
+			@log.debug challenge["uri"]
+			req = Net::HTTP::Post.new challenge["uri"]
+			req.body = genChallenge challenge
 			@log.debug req.body
 			response = http.request req
 			result = JSON.parse(response.body)
