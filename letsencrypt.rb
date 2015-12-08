@@ -17,7 +17,7 @@ require "acmeapi"
 # Default Values
 $VERBOSE=false
 acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
-proxy=ENV[acmedirUri.scheme+"_proxy"]
+proxy=URI ENV[acmedirUri.scheme+"_proxy"]
 challengeTokenFolder="."
 accountKeyFile=nil
 csrFilename=nil
@@ -37,7 +37,7 @@ optparse = OptionParser.new do |opts|
 	opts.on( '-u', '--letsencryptDirectoryUrl URL', 'URL where the ACME Let\'s encrypt Directory is located. Default : "'+acmedirUri.to_s+'"' ) do |f|
 		acmedirUri=URI f
 	end
-	opts.on( '-p', '--proxy URL', 'URL of the Proxy to use to access ACME URLs. Default : "'+((proxy==nil)?String.new():proxy)+'"' ) do |f|
+	opts.on( '-p', '--proxy URL', 'URL of the Proxy to use to access ACME URLs. Default : "'+((proxy==nil)?String.new():proxy.to_s)+'"' ) do |f|
 		proxy=URI f
 	end
 	opts.on( '-f', '--challengeTokenFolder DIR', 'Path to the folder where the challenge toke shouls be stored. Default : "'+challengeTokenFolder+'"' ) do |f|
