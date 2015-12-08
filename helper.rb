@@ -20,20 +20,27 @@ module Helper
 	end
 
 	def Pkey2Jwk( key )
-		result = {}
+		keydata = {}
 		if key.is_a? OpenSSL::PKey::RSA
-			result["kty"]="RSA"
+			keydata["kty"]="RSA"
 		elsif key.is_a?OpenSSL::PKey::EC
-			result["kty"]="EC"
+			keydata["kty"]="EC"
 		else
-			result["kty"]="UNKNOWN"
+			keydata["kty"]="UNKNOWN"
 		end
 		params=key.params
 		[["n","n"],["e","e"],["d","d"],["p","p"],["q","q"],["dp","dmp1"],["dq","dmq1"],["qi","iqmp"]].each do |v|
 			p=params[v[1]]
 			if !( p==nil or p == 0 )
-				result[v[0]]=numberToBase64 p
+				keydata[v[0]]=numberToBase64 p
 			end
+		end
+
+		# Since Ruby 1.9 the hash entry order is defined by it insert order
+		# We need the hash entries sorted in lexicographical order.
+		result={}
+		keydata.keys.sort.each do |k|
+			result[k]=keydata[k]
 		end
 		return result
 	end
