@@ -92,7 +92,6 @@ class AcmeApi
 			response = yield http
 			@nonce=response["Replay-Nonce"]
 			@log.debug "Request return with code : "+response.code
-			@log.debug "Response data : '"+response.body+"'"
 		end
 	end
 
@@ -141,6 +140,7 @@ class AcmeApi
 
 	def sendHttp01Challenge(challenge)
 		@log.info("Send challenge response ")
+		result=nil
 		connect do |http|
 			@log.debug challenge["uri"]
 			req = Net::HTTP::Post.new challenge["uri"]
@@ -150,5 +150,33 @@ class AcmeApi
 			result = JSON.parse(response.body)
 			response
 		end
+		return result
+	end
+
+	def sendCsr(csr)
+		@log.info "Send certificate signing request."
+		result=nil
+		connect do |http|
+			@log.debug @acmeApiCalls["new-cert"].path
+			req = Net::HTTP::Post.new @acmeApiCalls["new-cert"].path
+			req.body=newCertificate csr
+			@log.debug req.body
+			response=http.request req
+			result=OpenSSL::X509::Certificate.new response.body
+			response
+		end
+		return result
+	end
+
+	def getURI(uri)
+		@log.info("get URI")
+		result=nil
+		connect do |http|
+			@log.debug uri
+			response = http.request Net::HTTP::Get.new uri
+			result = JSON.parse(response.body)
+			response
+		end
+		return result
 	end
 end
