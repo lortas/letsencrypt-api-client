@@ -77,7 +77,9 @@ module Helper
 
 	def Asn1OctetStringToArray(o)
 		ret=[]
-		b=o.value.bytes
+		b=[]
+		o.value.bytes.each{|i| b<<i}
+		#skip the first two unknown bytes
 		unknown = b.slice!(0,2)
 		while b.size>0
 			tag=b.slice!(0)
