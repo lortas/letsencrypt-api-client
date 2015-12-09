@@ -20,6 +20,7 @@ proxy=nil
 challengeTokenFolder="."
 accountKeyFile=nil
 csrFilename=nil
+certFilename=nil
 
 if ENV[acmedirUri.scheme+"_proxy"]
 	proxy=URI ENV[acmedirUri.scheme+"_proxy"]
@@ -36,6 +37,9 @@ optparse = OptionParser.new do |opts|
 	end
 	opts.on( '-c', '--csr FILE', 'File where the certificate signing request (csr) is stored' ) do |f|
 		csrFilename = f
+	end
+	opts.on( '-o', '--cer FILE', 'File where the certificate will be stored into' ) do |f|
+		certFilename = f
 	end
 	opts.on( '-u', '--letsencryptDirectoryUrl URL', 'URL where the ACME Let\'s encrypt Directory is located. Default : "'+acmedirUri.to_s+'"' ) do |f|
 		acmedirUri=URI f
@@ -75,6 +79,7 @@ else
 	end
 end
 
+validetedchallenges=[]
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
 Helper.getDomainsFromCsr(csr).each do |domain|
@@ -92,10 +97,30 @@ Helper.getDomainsFromCsr(csr).each do |domain|
 			f << "."
 			f << acmeapi.accountpubkeySha256
 			f.close
-			acmeapi.sendHttp01Challenge challenge
+			result=acmeapi.sendHttp01Challenge challenge
+			while result["status"] == "pending"
+				sleep 1
+				result=acmeapi.getURI challenge["uri"]
+			end
 			File.unlink f
+			if result["status"] == "valid"
+				log.info "Challange is valid."
+				validetedchallenges << challenge
+			else
+				log.error "Challenge is "+result["status"]+": "+result["error"]["detail"]
+			end
 		else
 			log.info "Challenge type '"+challenge["type"]+"' not implemented."
 		end
 	end
+end
+
+#TODO: CSR should only be sent if ensured that all CSR-Domains are valided.
+result=acmeapi.sendCsr csr
+if certFilename==nil
+	puts result.to_pem
+else
+	f=File.new(certFilename,"w")
+	f<<result.to_pem
+	f.close
 end
