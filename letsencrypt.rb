@@ -117,10 +117,14 @@ end
 
 #TODO: CSR should only be sent if ensured that all CSR-Domains are valided.
 result=acmeapi.sendCsr csr
-if certFilename==nil
-	puts result.to_pem
+if result==nil
+	log.error "FAIL!"
 else
-	f=File.new(certFilename,"w")
-	f<<result.to_pem
-	f.close
+	if certFilename==nil
+		puts result.to_pem
+	else
+		f=File.new(certFilename,"w")
+		f<<result.to_pem
+		f.close
+	end
 end

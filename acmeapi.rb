@@ -162,7 +162,10 @@ class AcmeApi
 			req.body=newCertificate csr
 			@log.debug req.body
 			response=http.request req
-			result=OpenSSL::X509::Certificate.new response.body
+			code=response.code.to_i
+			if code>=200 and code<300
+				result=OpenSSL::X509::Certificate.new response.body
+			end
 			response
 		end
 		return result
