@@ -30,4 +30,4 @@ openssl req -new -sha256 -key domain.key -subj "/" -reqexts SAN -config <(cat /e
 And finally run the command
 <pre><code>./letsencrypt.rb -k account.key -c domain.csr -f /var/www/htdocs/.well-known/acme-challenge -o domain.cer -r 20</code></pre>
 
-You may use the command without '-f', but then you have to put the challenge file by your own. This is useful if you do not want or have doubts about to run this command on your server.
+You may use the command without '-f', but then you have to put the challenge file by your own. This is useful if you do not want (or have doubts about) to run this command on your server.
