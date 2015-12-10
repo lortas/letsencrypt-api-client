@@ -1,6 +1,11 @@
 # letsencrypt-api-client
 Independent command line client for the "Let’s Encrypt" (ACME) API. It is for people who want to generate certificate signing requests on their own and like to have little bit more control over the signing process.
 
+## precondition
+ * You need Ruby >1.9
+ * You may need ruby-json, in case it is not within your standard "libruby" distribution package
+ * You need write access into the folder <code>/.well-known/acme-challenge/</code> on your web-root where your domain is hosted.
+
 ## example usage
 
 First you need an identity also named account key. This a RSA key which can be generated with the following command
