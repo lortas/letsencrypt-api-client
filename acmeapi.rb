@@ -39,11 +39,11 @@ class AcmeApi
 		}
 	end
 
-	def newRegistration(domain)
+	def newRegistration(contactEmailAddress)
 		data = mainRequestData
 		data["payload"] = Helper.base64encode( {
 			"resource" => "new-reg",
-			"contact" => ["mailto:cert-admin@"+domain],
+			"contact" => ["mailto:"+contactEmailAddress],
 			"agreement" => "https://letsencrypt.org/documents/LE-SA-v1.0.1-July-27-2015.pdf"
 		}.to_json )
 		data["signature"] = Helper.base64encode @accountkey.sign(OpenSSL::Digest::SHA256.new, data["protected"]+"."+data["payload"])
@@ -91,7 +91,11 @@ class AcmeApi
 		Net::HTTP.start(@acmedirUri.host, @acmedirUri.port, proxy_host, proxy_port, :use_ssl => @acmedirUri.scheme == 'https', :verify_mode => OpenSSL::SSL::VERIFY_NONE  ) do |http|
 			response = yield http
 			@nonce=response["Replay-Nonce"]
-			@log.debug "Request return with code : "+response.code
+			responseCode=response.code.to_i
+			@log.debug "Request return with code : "+responseCode.to_s
+			if responseCode >= 400
+				@log.debug "Response body : "+response.body
+			end
 		end
 	end
 

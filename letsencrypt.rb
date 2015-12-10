@@ -19,6 +19,7 @@ acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
 proxy=nil
 challengeTokenFolder=nil
 accountKeyFile=nil
+accountEmailAddr=nil
 csrFilename=nil
 certFilename=nil
 renewalTime = nil
@@ -35,6 +36,9 @@ optparse = OptionParser.new do |opts|
 	end
 	opts.on( '-k', '--accountKey FILE', 'File where the private key for the ACME account is stored' ) do |f|
 		accountKeyFile = f
+	end
+	opts.on( '-e', '--accountEmail EMAIL', 'E-mail address used for the ACME account is stored. Default : cert-admin@[doamin]' ) do |f|
+		accountEmailAddr = f
 	end
 	opts.on( '-c', '--csr FILE', 'File where the certificate signing request (csr) is stored' ) do |f|
 		csrFilename = f
@@ -92,11 +96,19 @@ else
 	end
 end
 
+csrDomains=Helper.getDomainsFromCsr csr
+if csrDomains.size <1
+	log.error "Cound not find any domain within your certificate signing request."
+	exit
+end
+if accountEmailAddr==nil
+	accountEmailAddr="cert-admin@"+csrDomains[0]
+end
 validetedchallenges=[]
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
-Helper.getDomainsFromCsr(csr).each do |domain|
-	acmeapi.sendNewRegistration domain
+acmeapi.sendNewRegistration accountEmailAddr
+csrDomains.each do |domain|
 	challenges=acmeapi.sendNewAuthorisation domain
 	challenges.each do |challenge|
 		# we want to use the token as file name
