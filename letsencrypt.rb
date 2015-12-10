@@ -17,10 +17,11 @@ require "acmeapi"
 $VERBOSE=false
 acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
 proxy=nil
-challengeTokenFolder="."
+challengeTokenFolder=nil
 accountKeyFile=nil
 csrFilename=nil
 certFilename=nil
+renewalTime = nil
 
 if ENV[acmedirUri.scheme+"_proxy"]
 	proxy=URI ENV[acmedirUri.scheme+"_proxy"]
@@ -47,12 +48,26 @@ optparse = OptionParser.new do |opts|
 	opts.on( '-p', '--proxy URL', 'URL of the Proxy to use to access ACME URLs. Default : "'+((proxy==nil)?String.new():proxy.to_s)+'"' ) do |f|
 		proxy=URI f
 	end
-	opts.on( '-f', '--challengeTokenFolder DIR', 'Path to the folder where the challenge toke shouls be stored. Default : "'+challengeTokenFolder+'"' ) do |f|
+	opts.on( '-f', '--challengeTokenFolder DIR', 'Path to the folder where the challenge toke shouls be stored.' ) do |f|
 		challengeTokenFolder = f.sub(/\/*$/,"")
+	end
+	opts.on( '-r', '--renewalTime DAYS', 'The amount of day until the old certificates expiration date is still okay. If the certificate expiration date is more then DAYS in the future, no certificate renewal will be performed. Default behaviour is to perform always a certificate request.' ) do |f|
+		renewalTime = Time::now + ( 60 * 60 * 24 * f.to_i )
 	end
 end
 
 optparse.parse!
+
+if renewalTime!=nil and certFilename!=nil and File.exists?(certFilename)
+	oldcert = OpenSSL::X509::Certificate.new File.read certFilename
+	expiry=oldcert.not_after
+	if expiry > renewalTime
+		log.info "The expiration date '"+expiry.to_s+"' of the current certificate is to far in the future. Do not perform a certificate request to replace this certificate."
+		exit
+	end
+end
+
+exit
 
 accountKey=nil
 if accountKeyFile == nil
@@ -87,24 +102,42 @@ Helper.getDomainsFromCsr(csr).each do |domain|
 	challenges=acmeapi.sendNewAuthorisation domain
 	challenges.each do |challenge|
 		# we want to use the token as file name
-		# never trust forgin data. so we ensure that there is no bad character
+		# never trust foreign data. so we ensure that there is no bad character
 		token=challenge["token"].tr("/","")
 		case challenge["type"]
 		when "http-01"
-			f=File.new(challengeTokenFolder+"/"+token,"w")
-			f.chmod(0644)
-			f << token
-			f << "."
-			f << acmeapi.accountpubkeySha256
-			f.close
+			if challengeTokenFolder==nil
+				print "==== Manual 'http-01' Challenge ====\n"
+				print "1. Open a (remote) console to/on the system, whose IP address is resolving to the DNS entry '"+domain+"'.\n"
+				print "2. Ensure that you have running a web server daemon listening on tcp/80 and accessible from the internet.\n"
+				print "3. Change your current working directory to the DocumentRoot of the domain '"+domain+"'.\n"
+				print "4. Ensure that the following folder '.well-known/acme-challenge' exists ( mkdir -p .well-known/acme-challenge ).\n"
+				print "5. Change your current working directory to the folder above ( cd .well-known/acme-challenge ).\n"
+				print "6. Execute: echo -n '"+token+"."+acmeapi.accountpubkeySha256+"' > '"+token+"'\n"
+				print "7. Ensure that the new file is world-readable ( chmod +r '"+token+"' )\n"
+				print "8. Hit Enter if you have performed all steps above. "
+				gets
+			else
+				f=File.new(challengeTokenFolder+"/"+token,"w")
+				f.chmod(0644)
+				f << token
+				f << "."
+				f << acmeapi.accountpubkeySha256
+				f.close
+			end
 			result=acmeapi.sendHttp01Challenge challenge
 			while result["status"] == "pending"
 				sleep 1
 				result=acmeapi.getURI challenge["uri"]
 			end
-			File.unlink f
+			if challengeTokenFolder==nil
+				print "You now can remove any folder and file created above.\nHit Enter to continue. "
+				gets
+			else
+				File.unlink challengeTokenFolder+"/"+token
+			end
 			if result["status"] == "valid"
-				log.info "Challange is valid."
+				log.info "Challenge is valid."
 				validetedchallenges << challenge
 			else
 				log.error "Challenge is "+result["status"]+": "+result["error"]["detail"]
@@ -115,7 +148,7 @@ Helper.getDomainsFromCsr(csr).each do |domain|
 	end
 end
 
-#TODO: CSR should only be sent if ensured that all CSR-Domains are valided.
+#TODO: CSR should only be send if ensured that all CSR-Domains are approved to be valid.
 result=acmeapi.sendCsr csr
 if result==nil
 	log.error "FAIL!"
