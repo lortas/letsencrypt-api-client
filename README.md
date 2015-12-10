@@ -3,7 +3,7 @@ Independent command line client for the "Let’s Encrypt" (ACME) API. It is for 
 
 ## example usage
 
-First you need an identity also names account key:
+First you need an identity also named account key. This a RSA key which can be generated with the following command
 <pre><code>openssl genrsa -out account.key 4096</code></pre>
 
 Then you need an key for your Domain you want a certificate for
