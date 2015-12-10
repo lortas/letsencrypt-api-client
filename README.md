@@ -14,7 +14,7 @@ You can use this Tool in two ways
 
 ## example usage
 
-First you need an identity also, called 'account key'. This is a RSA key, which can be generated with the following command
+First you need an identity, also called 'account key'. This is a RSA key, which can be generated with the following command
 <pre><code>openssl genrsa -out account.key 4096</code></pre>
 
 Then you need a key for your domain you want a certificate for

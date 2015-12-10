@@ -67,8 +67,6 @@ if renewalTime!=nil and certFilename!=nil and File.exists?(certFilename)
 	end
 end
 
-exit
-
 accountKey=nil
 if accountKeyFile == nil
 	log.error "You did not specify the filename of your account key"
