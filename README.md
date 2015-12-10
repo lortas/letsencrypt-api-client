@@ -4,14 +4,15 @@ Independent command line client for the "Let’s Encrypt" (ACME) API. It is for 
 ## example usage
 
 First you need an identity also names account key:
-  openssl genrsa -out account.key 4096
+<pre><code>openssl genrsa -out account.key 4096</code></pre>
 
 Then you need an key for your Domain you want a certificate for
-  openssl genrsa -out domain.key 4096
+<pre><code>openssl genrsa -out domain.key 4096</code></pre>
 
 You can generate the certificate signing request file with one of the following commands
-  openssl req -new -sha256 -key domain.key -subj "/CN=www.example.org" -out domain.csr
-  openssl req -new -sha256 -key domain.key -subj "/" -reqexts SAN -config <(cat /etc/ssl/openssl.cnf <(printf "[SAN]\nsubjectAltName=DNS:example.org,DNS:www.example.org")) > domain.csr
+<pre><code>openssl req -new -sha256 -key domain.key -subj "/CN=www.example.org" -out domain.csr
+openssl req -new -sha256 -key domain.key -subj "/" -reqexts SAN -config <(cat /etc/ssl/openssl.cnf <(printf "[SAN]\nsubjectAltName=DNS:example.org,DNS:www.example.org")) > domain.csr</code></pre>
 
-./letsencrypt.rb -k account.key -c domain.csr -f /var/www/htdocs/.well-known/acme-challenge -o domain.cer
+And finally run the command
+<pre><code>./letsencrypt.rb -k account.key -c domain.csr -f /var/www/htdocs/.well-known/acme-challenge -o domain.cer</code></pre>
 
