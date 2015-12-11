@@ -31,3 +31,14 @@ And finally run the command
 <pre><code>./letsencrypt.rb -k account.key -c domain.csr -f /var/www/htdocs/.well-known/acme-challenge -o domain.cer -r 20</code></pre>
 
 You may use the command without '-f', but then you have to put the challenge file by your own. This is useful if you do not want (or have doubts about) to run this command on your server.
+
+Here is an example for a cron file <code>/etc/cron.weekly/updateLetsencrypt</code>
+<pre><code>
+if [ `stat --format=%Y /etc/ssl/private/example_org.key` -le $(( `date +%s` - 31630000 )) ]
+then
+    openssl genrsa -out /etc/ssl/private/example_org.key 4096
+fi
+openssl req -new -sha256 -key /etc/ssl/private/example_org.key -subj "/CN=example.org" > /etc/ssl/example_org.csr
+/opt/letsencrypt-api-client/letsencrypt.rb -q -k /etc/ssl/private/letsencrypt_account.key -e cert-admin@example.org -c /etc/ssl/example_org.csr -f /var/www/htdocs/.well-known/acme-challenge/ -o /etc/ssl/certs/example_org.pem -r 20
+rm /etc/ssl/example_org.csr
+</code></pre>
