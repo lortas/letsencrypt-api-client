@@ -18,7 +18,6 @@ class AcmeApi
 		@proxy=proxy
 		@acmeApiCalls={}
 		@accountpubkey=Helper.Pkey2Jwk( @accountkey.public_key )
-		puts @accountpubkey
 		@accountpubkeySha256 = Helper.base64encode OpenSSL::Digest.digest("SHA256",@accountpubkey.to_json)
 	end
 
@@ -94,7 +93,7 @@ class AcmeApi
 			responseCode=response.code.to_i
 			@log.debug "Request return with code : "+responseCode.to_s
 			if responseCode >= 400
-				@log.debug "Response body : "+response.body
+				@log.warn "Response body : "+response.body
 			end
 		end
 	end

@@ -6,6 +6,8 @@ require 'openssl'
 # Logger
 log = Logger.new(STDOUT)
 log.progname = "letsencrypt"
+log.level = Logger::INFO
+
 
 # Insert local path to library path list
 $:.unshift File.dirname(__FILE__)
@@ -33,6 +35,11 @@ optparse = OptionParser.new do |opts|
 	opts.banner = "Usage: letsencrypt.rb [options]"
 	opts.on( '-v', '--verbose', 'Enable verbosity. Default is off.' ) do |verbose|
 		$VERBOSE = true
+		log.level=Logger::DEBUG
+	end
+	opts.on( '-q', '--quiet', 'Be more quiet.' ) do |verbose|
+		$VERBOSE = false
+		log.level=Logger::WARN
 	end
 	opts.on( '-k', '--accountKey FILE', 'File where the private key for the ACME account is stored' ) do |f|
 		accountKeyFile = f
@@ -104,13 +111,18 @@ end
 if accountEmailAddr==nil
 	accountEmailAddr="cert-admin@"+csrDomains[0]
 end
-validetedchallenges=[]
+
+log.info "It seems that we do have everything to ask for our certificate. Let's start."
+
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
 acmeapi.sendNewRegistration accountEmailAddr
+allChallengesAreApproved=true
 csrDomains.each do |domain|
+	challengesAreApproved=false
 	challenges=acmeapi.sendNewAuthorisation domain
 	challenges.each do |challenge|
+		oneChallengeIsApproved=false
 		# we want to use the token as file name
 		# never trust foreign data. so we ensure that there is no bad character
 		token=challenge["token"].tr("/","")
@@ -148,17 +160,28 @@ csrDomains.each do |domain|
 			end
 			if result["status"] == "valid"
 				log.info "Challenge is valid."
-				validetedchallenges << challenge
+				oneChallengeIsApproved=true
 			else
-				log.error "Challenge is "+result["status"]+": "+result["error"]["detail"]
+				log.warn "Challenge is "+result["status"]+": "+result["error"]["detail"]
 			end
 		else
 			log.info "Challenge type '"+challenge["type"]+"' not implemented."
 		end
+		if oneChallengeIsApproved
+			challengesAreApproved=true
+		end
+	end
+	unless challengesAreApproved
+		allChallengesAreApproved=false
+		log.error "Could not perform at least one approved challenge for the domain '"+domain+"'."
 	end
 end
 
-#TODO: CSR should only be send if ensured that all CSR-Domains are approved to be valid.
+unless allChallengesAreApproved
+	log.error "Not all needed challenges were approved to be valid. We need at least one approved challenge for each domain noted within the certificate signing request file. Please consider the log entries to determine which challenge failed."
+	exit
+end
+
 result=acmeapi.sendCsr csr
 if result==nil
 	log.error "FAIL!"
