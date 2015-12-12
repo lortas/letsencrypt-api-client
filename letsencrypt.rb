@@ -19,6 +19,7 @@ require "acmeapi"
 $VERBOSE=false
 acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
 proxy=nil
+useHttps=false
 challengeTokenFolder=nil
 accountKeyFile=nil
 accountEmailAddr=nil
@@ -40,6 +41,9 @@ optparse = OptionParser.new do |opts|
 	opts.on( '-q', '--quiet', 'Be more quiet.' ) do |verbose|
 		$VERBOSE = false
 		log.level=Logger::WARN
+	end
+	opts.on( '-s', '--useHttps', 'Instead of httpi, use https (tcp/443) for certificate challenge. Useful if you do not have a web server listen on tcp/80.' ) do |verbose|
+		useHttps=true
 	end
 	opts.on( '-k', '--accountKey FILE', 'File where the private key for the ACME account is stored' ) do |f|
 		accountKeyFile = f
@@ -125,29 +129,42 @@ csrDomains.each do |domain|
 		oneChallengeIsApproved=false
 		# we want to use the token as file name
 		# never trust foreign data. so we ensure that there is no bad character
-		token=challenge["token"].tr("/","")
+		token=challenge["token"]
+		unless Helper.testForNonBase64UrlChars token
+			log.error "The challenge token '"+token+"' has non Base64Url characters. Skip this challenge."
+			next
+		end
 		case challenge["type"]
-		when "http-01"
+		when "http-01","tls-sni-01"
+			protocol=(challenge["type"]=="http-01")?"http":"https"
+			if (protocol=="http" and useHttps) or (protocol=="https" and !useHttps)
+				log.debug "Skipping '"+challenge["type"]+"'-challenge. We do not want to do an "+protocol+" based challenge."
+				next
+			end
+			log.debug "Starting '"+challenge["type"]+"'-challenge. This is an "+protocol+" based challenge."
+			keyAuthorization=token+"."+acmeapi.accountpubkeySha256
 			if challengeTokenFolder==nil
-				print "==== Manual 'http-01' Challenge ====\n"
+				print "==== manual '"+protocol+"' based challenge ====\n"
+				print "The following link need to deliver the following content.\n"
+				print " - URL:     "+protocol+"://"+domain+"/.well-known/acme-challenge/"+token+"\n"
+				print " - Content: "+keyAuthorization+"\n\n"
+				print "This may be done by the following steps:\n"
 				print "1. Open a (remote) console to/on the system, whose IP address is resolving to the DNS entry '"+domain+"'.\n"
 				print "2. Ensure that you have running a web server daemon listening on tcp/80 and accessible from the internet.\n"
 				print "3. Change your current working directory to the DocumentRoot of the domain '"+domain+"'.\n"
 				print "4. Ensure that the following folder '.well-known/acme-challenge' exists ( mkdir -p .well-known/acme-challenge ).\n"
 				print "5. Change your current working directory to the folder above ( cd .well-known/acme-challenge ).\n"
-				print "6. Execute: echo -n '"+token+"."+acmeapi.accountpubkeySha256+"' > '"+token+"'\n"
+				print "6. Execute: echo -n '"+keyAuthorization+"' > '"+token+"'\n"
 				print "7. Ensure that the new file is world-readable ( chmod +r '"+token+"' )\n"
 				print "8. Hit Enter if you have performed all steps above. "
 				gets
 			else
 				f=File.new(challengeTokenFolder+"/"+token,"w")
 				f.chmod(0644)
-				f << token
-				f << "."
-				f << acmeapi.accountpubkeySha256
+				f << keyAuthorization
 				f.close
 			end
-			result=acmeapi.sendHttp01Challenge challenge
+			result=acmeapi.sendChallenge challenge
 			while result["status"] == "pending"
 				sleep 1
 				result=acmeapi.getURI challenge["uri"]
@@ -162,7 +179,13 @@ csrDomains.each do |domain|
 				log.info "Challenge is valid."
 				oneChallengeIsApproved=true
 			else
-				log.warn "Challenge is "+result["status"]+": "+result["error"]["detail"]
+				detail=""
+				if result["error"]
+					detail=result["error"]["detail"]
+				elsif result["detail"]
+					detail=result["detail"]
+				end
+				log.warn "Challenge is "+result["status"].to_s+": "+detail
 			end
 		else
 			log.info "Challenge type '"+challenge["type"]+"' not implemented."

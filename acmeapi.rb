@@ -141,7 +141,7 @@ class AcmeApi
 		return challenges
 	end
 
-	def sendHttp01Challenge(challenge)
+	def sendChallenge(challenge)
 		@log.info("Send challenge response ")
 		result=nil
 		connect do |http|

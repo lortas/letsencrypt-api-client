@@ -10,6 +10,11 @@ module Helper
 		return [data].pack("m0").sub(/=*$/,"").tr("/+","_-")
 	end
 
+	def testForNonBase64UrlChars(string)
+		i=string.index(/[^-_0-9A-Za-z]/)
+		return i==nil
+	end
+
 	def numberToBase64(number)
 		hex = number.to_s(16)
 		if hex.length%2 == 1
