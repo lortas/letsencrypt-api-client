@@ -46,3 +46,5 @@ openssl req -new -sha256 -key /etc/ssl/private/example_org.key -subj "/CN=exampl
 /opt/letsencrypt-api-client/letsencrypt.rb -q -k /etc/ssl/private/letsencrypt_account.key -e cert-admin@example.org -c /etc/ssl/example_org.csr -f /var/www/htdocs/.well-known/acme-challenge/ -o /etc/ssl/certs/example_org.pem -r 20
 rm /etc/ssl/example_org.csr
 </code></pre>
+
+The script above checks if the domain key file is older than one year and generates a new key if it is so. After generating a CSR the script calls the acme-api-client which quits limitedly if the destination certificate file exists and contains a certificate which is expires in a far (20 days) future.
