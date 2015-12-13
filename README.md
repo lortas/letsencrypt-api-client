@@ -1,7 +1,11 @@
 # letsencrypt-api-client
 Independent command line client for the "Let’s Encrypt" (ACME) API. It is for people who want to generate certificate signing requests on their own and like to have little bit more control over the signing process.
 
-You can use this Tool in two ways
+This client was inspired by https://github.com/diafygi/gethttpsforfree and has a similar intension. So the same note applies here too:
+
+> This tool is for people who know how to generate certificate signing requests (CSRs)! If you are not familiar with how to do this, please use the official Let's Encrypt client that can automatically issue and install certificates for you. This tool is designed for people who know what they are doing and just want to get their free certificate.
+
+You can use this tool in two ways
 
  1. Within your server scripts, to automatically get a new certificate when your previous one will expire soon.
  2. On a client system, to get manual a new certificate, that will be placed on the server by your one.
