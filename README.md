@@ -12,13 +12,13 @@ You can use this tool in two ways
  3. And any kind in between.
 
 ## precondition
- * You need Ruby >1.9
- * You may need ruby-json, in case it is not within your standard "libruby" distribution package
+ * You need Ruby >1.9.0
+ * You may need <code>ruby-json</code>, in case it is not within your standard <code>libruby</code> distribution package
  * You need write access into the folder <code>/.well-known/acme-challenge/</code> on your web-root where your domain is hosted.
 
 ## example usage
 
-First you need an identity, also called 'account key'. This is a RSA key, which can be generated with the following command
+First you need an identity, also called *account key*. This is a RSA key, which can be generated with the following command
 <pre><code>openssl genrsa -out account.key 4096</code></pre>
 
 Then you need a key for your domain you want a certificate for
@@ -34,7 +34,7 @@ openssl req -new -sha256 -key domain.key -subj "/" -reqexts SAN -config <(cat /e
 And finally run the command
 <pre><code>./letsencrypt.rb -k account.key -c domain.csr -f /var/www/htdocs/.well-known/acme-challenge -o domain.cer -r 20</code></pre>
 
-You may use the command without '-f', but then you have to put the challenge file by your own. This is useful if you do not want (or have doubts about) to run this command on your server.
+You may use the command without <code>-f</code>, but then you have to put the challenge file by your own. This is useful if you do not want (or have doubts about) to run this command on your server.
 
 Here is an example for a cron file <code>/etc/cron.weekly/updateLetsencrypt</code>
 <pre><code>
