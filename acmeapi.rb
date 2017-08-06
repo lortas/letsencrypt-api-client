@@ -106,7 +106,11 @@ class AcmeApi
 			if response.code.to_i == 200
 				@log.info("ACME Directory successfull received.")
 				JSON.parse(response.body).each do |k,v|
-					@acmeApiCalls[k]=URI v
+					if k == "meta"
+						@acmeApiCalls[k]=v
+					else
+						@acmeApiCalls[k]=URI v
+					end
 				end
 			end
 			response
