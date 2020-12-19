@@ -17,7 +17,7 @@ require "acmeapi"
 
 # Default Values
 $VERBOSE=false
-acmedirUri=URI "https://acme-v01.api.letsencrypt.org/directory"
+acmedirUri=URI "https://acme-v02.api.letsencrypt.org/directory"
 proxy=nil
 useHttps=false
 challengeTokenFolder=nil
@@ -25,6 +25,7 @@ accountKeyFile=nil
 accountEmailAddr=nil
 csrFilename=nil
 certFilename=nil
+chainFilename=nil
 renewalTime = nil
 
 if ENV[acmedirUri.scheme+"_proxy"]
@@ -56,6 +57,9 @@ optparse = OptionParser.new do |opts|
 	end
 	opts.on( '-o', '--cer FILE', 'File where the certificate will be stored into' ) do |f|
 		certFilename = f
+	end
+	opts.on( '-n', '--chain FILE', 'File where the CA certificate(s) will be stored into' ) do |f|
+		chainFilename = f
 	end
 	opts.on( '-u', '--letsencryptDirectoryUrl URL', 'URL where the ACME Let\'s encrypt Directory is located. Default : "'+acmedirUri.to_s+'"' ) do |f|
 		acmedirUri=URI f
@@ -120,102 +124,82 @@ log.info "It seems that we do have everything to ask for our certificate. Let's 
 
 acmeapi=AcmeApi.new accountKey,acmedirUri,proxy,log
 acmeapi.loadAcmeDirectory
+acmeapi.requestNewNonce
 acmeapi.sendNewRegistration accountEmailAddr
-allChallengesAreApproved=true
-csrDomains.each do |domain|
-	challengesAreApproved=false
-	challenges=acmeapi.sendNewAuthorisation domain
-	challenges.each do |challenge|
-		oneChallengeIsApproved=false
-		# we want to use the token as file name
-		# never trust foreign data. so we ensure that there is no bad character
-		token=challenge["token"]
-		unless Helper.testForNonBase64UrlChars token
-			log.error "The challenge token '"+token+"' has non Base64Url characters. Skip this challenge."
-			next
-		end
-		case challenge["type"]
-		when "http-01","tls-sni-01"
-			protocol=(challenge["type"]=="http-01")?"http":"https"
-			if (protocol=="http" and useHttps) or (protocol=="https" and !useHttps)
-				log.debug "Skipping '"+challenge["type"]+"'-challenge. We do not want to do an "+protocol+" based challenge."
-				next
-			end
-			log.debug "Starting '"+challenge["type"]+"'-challenge. This is an "+protocol+" based challenge."
-			keyAuthorization=token+"."+acmeapi.accountpubkeySha256
-			if challengeTokenFolder==nil
-				print "==== manual '"+protocol+"' based challenge ====\n"
-				print "The following link need to deliver the following content.\n"
-				print " - URL:     "+protocol+"://"+domain+"/.well-known/acme-challenge/"+token+"\n"
-				print " - Content: "+keyAuthorization+"\n\n"
-				print "This may be done by the following steps:\n"
-				print "1. Open a (remote) console to/on the system, whose IP address is resolving to the DNS entry '"+domain+"'.\n"
-				print "2. Ensure that you have running a web server daemon listening on tcp/"
-				print (protocol=="http")?"80":"443"
-				print " and accessible from the internet.\n"
-				print "3. Change your current working directory to the DocumentRoot of the domain '"+domain+"'.\n"
-				print "4. Ensure that the following folder '.well-known/acme-challenge' exists ( mkdir -p .well-known/acme-challenge ).\n"
-				print "5. Change your current working directory to the folder above ( cd .well-known/acme-challenge ).\n"
-				print "6. Execute: echo -n '"+keyAuthorization+"' > '"+token+"'\n"
-				print "7. Ensure that the new file is world-readable ( chmod +r '"+token+"' )\n"
-				print "8. Hit Enter if you have performed all steps above. "
-				gets
-			else
-				f=File.new(challengeTokenFolder+"/"+token,"w")
-				f.chmod(0644)
-				f << keyAuthorization
-				f.close
-			end
-			result=acmeapi.sendChallenge challenge
-			while result["status"] == "pending"
-				sleep 1
-				result=acmeapi.getURI challenge["uri"]
-			end
-			if challengeTokenFolder==nil
-				print "You now can remove any folder and file created above.\nHit Enter to continue. "
-				gets
-			else
-				File.unlink challengeTokenFolder+"/"+token
-			end
-			if result["status"] == "valid"
-				log.info "Challenge is valid."
-				oneChallengeIsApproved=true
-			else
-				detail=""
-				if result["error"]
-					detail=result["error"]["detail"]
-				elsif result["detail"]
-					detail=result["detail"]
-				end
-				log.warn "Challenge is "+result["status"].to_s+": "+detail
-			end
+order=acmeapi.newOrder csrDomains
+placedtoken=[]
+while ! order["authorizations"].empty?
+	done=[]
+	order["authorizations"].each do |authorization|
+		authObject=acmeapi.getAuthorization authorization
+		domain=authObject["identifier"]["value"]
+		challenges=authObject["challenges"].select{|c| c["type"]=="http-01" && c["status"]=="pending" }
+		if challenges.empty?
+			done << authorization
 		else
-			log.info "Challenge type '"+challenge["type"]+"' not implemented."
-		end
-		if oneChallengeIsApproved
-			challengesAreApproved=true
+			challenges.each do |challenge|
+				protocol="http"
+				token=challenge["token"]
+				keyAuthorization=token+"."+acmeapi.accountpubkeySha256
+				if placedtoken.include? token
+					sleep 60
+				else
+					if challengeTokenFolder==nil
+						print "==== manual '"+protocol+"' based challenge ====\n"
+						print "The following link need to deliver the following content.\n"
+						print " - URL:     "+protocol+"://"+domain+"/.well-known/acme-challenge/"+token+"\n"
+						print " - Content: "+keyAuthorization+"\n\n"
+						print "This may be done by the following steps:\n"
+						print "1. Open a (remote) console to/on the system, whose IP address is resolving to the DNS entry '"+domain+"'.\n"
+						print "2. Ensure that you have running a web server daemon listening on tcp/"
+						print (protocol=="http")?"80":"443"
+						print " and accessible from the internet.\n"
+						print "3. Change your current working directory to the DocumentRoot of the domain '"+domain+"'.\n"
+						print "4. Ensure that the following folder '.well-known/acme-challenge' exists ( mkdir -p .well-known/acme-challenge ).\n"
+						print "5. Change your current working directory to the folder above ( cd .well-known/acme-challenge ).\n"
+						print "6. Execute: echo -n '"+keyAuthorization+"' > '"+token+"'\n"
+						print "7. Ensure that the new file is world-readable ( chmod +r '"+token+"' )\n"
+						print "8. Hit Enter if you have performed all steps above. "
+						gets
+					else
+						f=File.new(challengeTokenFolder+"/"+token,"w")
+						f.chmod(0644)
+						f << keyAuthorization
+						f.close
+					end
+					placedtoken << token
+				end
+				acmeapi.getObject(URI challenge["url"])
+			end
 		end
 	end
-	unless challengesAreApproved
-		allChallengesAreApproved=false
-		log.error "Could not perform at least one approved challenge for the domain '"+domain+"'."
-	end
+	done.each{ |authorization| order["authorizations"].delete authorization }
 end
-
-unless allChallengesAreApproved
-	log.error "Not all needed challenges were approved to be valid. We need at least one approved challenge for each domain noted within the certificate signing request file. Please consider the log entries to determine which challenge failed."
-	exit
-end
-
-result=acmeapi.sendCsr csr
-if result==nil
-	log.error "FAIL!"
+if challengeTokenFolder==nil
+	print "You now can remove any folder and file created above.\nHit Enter to continue. "
+	gets
 else
-	if certFilename==nil
-		puts result.to_pem
-	else
-		f=File.new(certFilename,"w")
-		f<<result.to_pem
-		f.close
+	placedtoken.each do |token|
+		File.unlink challengeTokenFolder+"/"+token
 	end
+end
+finalize=acmeapi.getObject( URI(order["finalize"]) , {"csr"=>Helper.base64encode(csr.to_der)} )
+chain=acmeapi.getURI URI finalize[:body]["certificate"]
+# We just assume that the first certificate is the client certificate and not one of the CA certificates
+certificate=chain.slice!(/-----BEGIN CERTIFICATE-----(.|\n|\r)*?-----END CERTIFICATE-----/)
+chain.strip!
+
+if certFilename==nil
+	puts certificate
+	puts chain
+else
+	f=File.new(certFilename,"w")
+	f.puts certificate
+	# if no chain file defined, we append the chain to the cert file
+	unless chainFilename==nil
+		f.close
+		f=File.new(chainFilename,"w")
+	end
+	f.puts chain
+	f.close
 end
