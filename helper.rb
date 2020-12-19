@@ -94,4 +94,12 @@ module Helper
 		end
 		return ret
 	end
+
+	def splitPems(data)
+		result=[]
+		while e=data.sub!(/-----BEGIN ([A-Z][A-Z ]*)-----[\n\r]+.*?\n-----END \1-----[\n\r]*/,"")
+			result << e
+		end
+		return result
+	end
 end
