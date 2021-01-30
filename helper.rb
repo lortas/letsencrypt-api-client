@@ -102,4 +102,89 @@ module Helper
 		end
 		return result
 	end
+
+	def buildcertchain(chain)
+		certificates={}
+		while certificate=chain.slice!(/-----BEGIN CERTIFICATE-----(.|\n|\r)*?-----END CERTIFICATE-----/)
+			chain.strip!
+			c=OpenSSL::X509::Certificate.new certificate
+			h=c.subject.hash
+			if certificates.key? h
+				certificates[h] << c.to_pem
+			else
+				certificates[h] = [c.to_pem]
+			end
+		end
+
+		notdone=true
+		while notdone
+			newcerts=[]
+			certificates.each_pair do |subject_hash,certs|
+				certs.each do |certificate|
+					c=OpenSSL::X509::Certificate.new certificate
+					next if c.issuer.hash == subject_hash
+					Dir["/etc/ssl/certs/"+c.issuer.hash.to_s(16)+".*"].each do |cafile|
+						cacert=File.read(cafile).strip
+						newcerts << OpenSSL::X509::Certificate.new(cacert).to_pem
+					end
+				end
+			end
+			notdone=false
+			newcerts.each do |certificate|
+				c=OpenSSL::X509::Certificate.new certificate
+				h=c.subject.hash
+				if certificates.key? h
+					unless certificates[h].include?( c.to_pem )
+						notdone=true
+						certificates[h] << c.to_pem
+					end
+				else
+					notdone=true
+					certificates[h] = [c.to_pem]
+				end
+				certificates[h].uniq!
+			end
+		end
+
+		# Convert all PEMs to certificate object
+		certificates.each_value{|certs| certs.map!{|c| OpenSSL::X509::Certificate.new c}}
+
+		# Get a list off all issuers
+		all_issuers=[]
+		certificates.each_value do |certs|
+			all_issuers  += certs.map{|c| c.issuer.hash}.uniq
+		end
+		all_issuers.uniq!
+		# Search for certificate which are not an issuer
+		non_issuers=certificates.keys.select{|subj| ! all_issuers.include?(subj) }
+
+		chains=[]
+		non_issuers.each do |issuer|
+			chains+=certificates[issuer].map{|c|[c]}
+			certificates.delete issuer
+		end
+
+		notdone=true
+		while notdone
+			newchains=[]
+			notdone=false
+			chains.each do |chain|
+				h=chain.last.issuer.hash
+				if (h!=chain.last.subject.hash) and certificates.key?(h)
+					certificates[h].each do |cert|
+						newchains << chain.clone.append(cert)
+					end
+					notdone=true
+				else
+					newchains << chain
+				end
+			end
+			chains=newchains
+		end
+
+		return [
+			chains.map{|chain| chain.shift.to_pem}.uniq.map{|c| OpenSSL::X509::Certificate.new c}.map{|c| "subject="+c.subject.to_s+"\nissuer="+c.issuer.to_s+"\nnot_before="+c.not_before.to_s+"\nnot_after="+c.not_after.to_s+"\n"+c.to_pem}.join,
+			chains.flatten.map{|c| c.to_pem}.uniq.map{|c| OpenSSL::X509::Certificate.new c}.select{|c| c.subject.hash!=c.issuer.hash}.map{|c| "subject="+c.subject.to_s+"\nissuer="+c.issuer.to_s+"\nnot_before="+c.not_before.to_s+"\nnot_after="+c.not_after.to_s+"\n"+c.to_pem}.join
+		]
+	end
 end
