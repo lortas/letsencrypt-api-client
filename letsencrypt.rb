@@ -184,10 +184,7 @@ else
 	end
 end
 finalize=acmeapi.getObject( URI(order["finalize"]) , {"csr"=>Helper.base64encode(csr.to_der)} )
-chain=acmeapi.getURI URI finalize[:body]["certificate"]
-# We just assume that the first certificate is the client certificate and not one of the CA certificates
-certificate=chain.slice!(/-----BEGIN CERTIFICATE-----(.|\n|\r)*?-----END CERTIFICATE-----/)
-chain.strip!
+certificate,chain =Helper.buildcertchain acmeapi.getURI URI finalize[:body]["certificate"]
 
 if certFilename==nil
 	puts certificate
