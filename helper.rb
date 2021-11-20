@@ -64,7 +64,18 @@ module Helper
 						ary = Asn1SequenceToArray i
 						if ary.size==2 and ary[0].is_a? OpenSSL::ASN1::ObjectId and ary[0].value=="subjectAltName"
 							Asn1OctetStringToArray(ary[1]).each do |v|
-								domains[v[1]]=true
+								if v[0] == 130
+									# Domain Name
+									domains[v[1]]=true
+								elsif v[0] == 135
+									# IPv4 Address
+									ip=v[1].chars.map{|x| x.ord.to_s}.join(".")
+									domains[ip]=true
+								else
+									# unknown Type
+									p v
+									domains[v[1]]=true
+								end
 							end
 						end
 					end
